@@ -56,13 +56,13 @@ def get_latest_iter() -> Generator[float, None, JavaResourcePack]:
             new_version = get_launcher_manifest()["latest"]["snapshot"]
         else:
             new_version = get_launcher_manifest()["latest"]["release"]
-    except Exception as e:
+    except Exception:
         if os.path.isdir(vanilla_rp_path):
             log.error(
                 "Could not download the launcher manifest. The resource pack seems to be present so using that."
             )
         else:
-            raise e
+            raise
     else:
         has_new_pack = False
         if os.path.isfile(os.path.join(vanilla_rp_path, "version")):
@@ -203,10 +203,10 @@ def download_resources_iter(
         if "pack.png" in client.namelist():
             client.extract("pack.png", path)
 
-    except Exception as e:
+    except Exception:
         log.error(
             f"Failed to download and extract the Java resource pack for version {version}.",
             exc_info=True,
         )
-        raise e
+        raise
     log.info(f"Finished downloading Java resource pack for version {version}")
