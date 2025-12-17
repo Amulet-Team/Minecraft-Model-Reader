@@ -17,12 +17,20 @@ launcher_manifest: Optional[dict] = None
 INCLUDE_SNAPSHOT = False
 
 
+def get_http(url: str) -> str:
+    """Strip https from the url."""
+    if url.startswith("https://"):
+        return "http" + url[5:]
+    return url
+
+
 def get_launcher_manifest() -> dict:
     global launcher_manifest
     if launcher_manifest is None:
         log.info("Downloading java launcher manifest file.")
         with urlopen(
-            "https://launchermeta.mojang.com/mc/game/version_manifest.json", timeout=20
+            get_http("https://launchermeta.mojang.com/mc/game/version_manifest.json"),
+            timeout=20,
         ) as manifest:
             launcher_manifest = json.load(manifest)
         log.info("Finished downloading java launcher manifest file.")
@@ -166,11 +174,11 @@ def download_resources_iter(
         raise Exception(f"Could not find Java resource pack for version {version}.")
 
     try:
-        with urlopen(version_url, timeout=20) as vm:
+        with urlopen(get_http(version_url), timeout=20) as vm:
             version_manifest = json.load(vm)
         version_client_url = version_manifest["downloads"]["client"]["url"]
 
-        downloader = download_with_retry(version_client_url)
+        downloader = download_with_retry(get_http(version_client_url))
         try:
             while True:
                 yield next(downloader) / 2
