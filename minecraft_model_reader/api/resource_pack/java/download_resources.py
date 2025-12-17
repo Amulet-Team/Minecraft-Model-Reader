@@ -17,12 +17,20 @@ launcher_manifest: Optional[dict] = None
 INCLUDE_SNAPSHOT = False
 
 
+def get_http(url: str) -> str:
+    """Strip https from the url."""
+    if url.startswith("https://"):
+        return "http" + url[5:]
+    return url
+
+
 def get_launcher_manifest() -> dict:
     global launcher_manifest
     if launcher_manifest is None:
         log.info("Downloading java launcher manifest file.")
         with urlopen(
-            "https://launchermeta.mojang.com/mc/game/version_manifest.json", timeout=20
+            get_http("https://launchermeta.mojang.com/mc/game/version_manifest.json"),
+            timeout=20,
         ) as manifest:
             launcher_manifest = json.load(manifest)
         log.info("Finished downloading java launcher manifest file.")
@@ -56,13 +64,13 @@ def get_latest_iter() -> Generator[float, None, JavaResourcePack]:
             new_version = get_launcher_manifest()["latest"]["snapshot"]
         else:
             new_version = get_launcher_manifest()["latest"]["release"]
-    except Exception as e:
+    except Exception:
         if os.path.isdir(vanilla_rp_path):
             log.error(
                 "Could not download the launcher manifest. The resource pack seems to be present so using that."
             )
         else:
-            raise e
+            raise
     else:
         has_new_pack = False
         if os.path.isfile(os.path.join(vanilla_rp_path, "version")):
@@ -166,11 +174,11 @@ def download_resources_iter(
         raise Exception(f"Could not find Java resource pack for version {version}.")
 
     try:
-        with urlopen(version_url, timeout=20) as vm:
+        with urlopen(get_http(version_url), timeout=20) as vm:
             version_manifest = json.load(vm)
         version_client_url = version_manifest["downloads"]["client"]["url"]
 
-        downloader = download_with_retry(version_client_url)
+        downloader = download_with_retry(get_http(version_client_url))
         try:
             while True:
                 yield next(downloader) / 2
@@ -203,10 +211,10 @@ def download_resources_iter(
         if "pack.png" in client.namelist():
             client.extract("pack.png", path)
 
-    except Exception as e:
+    except Exception:
         log.error(
             f"Failed to download and extract the Java resource pack for version {version}.",
             exc_info=True,
         )
-        raise e
+        raise
     log.info(f"Finished downloading Java resource pack for version {version}")
