@@ -186,14 +186,14 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                 try:
                     self._blockstate_files[key] = json.load(fi)
                 except json.JSONDecodeError:
-                    log.error(f"Failed to parse blockstate file {path}")
+                    log.exception(f"Failed to parse blockstate file {path}")
 
         for key, path in model_file_paths.items():
             with open(path) as fi:
                 try:
                     self._model_files[key] = json.load(fi)
                 except json.JSONDecodeError:
-                    log.error(f"Failed to parse model file file {path}")
+                    log.exception(f"Failed to parse model file file {path}")
 
     @property
     def textures(self) -> tuple[str, ...]:
@@ -236,8 +236,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                                 blockstate["variants"][variant]
                             )
                         except Exception as e:
-                            log.error(
-                                f"Failed to load block model {blockstate['variants'][variant]}\n{e}"
+                            log.exception(
+                                f"Failed to load block model {blockstate['variants'][variant]}"
                             )
                     else:
                         properties_match = Block.properties_regex.finditer(
@@ -256,8 +256,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                                     blockstate["variants"][variant]
                                 )
                             except Exception as e:
-                                log.error(
-                                    f"Failed to load block model {blockstate['variants'][variant]}\n{e}"
+                                log.exception(
+                                    f"Failed to load block model {blockstate['variants'][variant]}"
                                 )
 
             elif "multipart" in blockstate:
@@ -300,11 +300,11 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                                 )
 
                             except Exception as e:
-                                log.error(
-                                    f"Failed to load block model {case['apply']}\n{e}"
+                                log.exception(
+                                    f"Failed to load block model {case['apply']}"
                                 )
                     except Exception as e:
-                        log.error(f"Failed to parse block state for {block}\n{e}")
+                        log.exception(f"Failed to parse block state for {block}")
 
                 return BlockMesh.merge(models)
 
