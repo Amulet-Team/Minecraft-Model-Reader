@@ -411,6 +411,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                         texture_relative_path = java_model["textures"].get(
                             texture_relative_path[1:], None
                         )
+                    if isinstance(texture_relative_path, dict):
+                        texture_relative_path = texture_relative_path["sprite"]
                     texture_path_list = texture_relative_path.split(":", 1)
                     if len(texture_path_list) == 2:
                         namespace, texture_relative_path = texture_path_list
