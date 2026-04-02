@@ -116,8 +116,9 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                         rel_path = "/".join(rel_path_list)[:-4]
                         self._textures[(namespace, rel_path)] = texture_path
                         if (
-                            os.stat(texture_path).st_mtime
-                            != self._texture_is_transparent.get(texture_path, [0])[0]
+                            texture_path not in self._texture_is_transparent
+                            or os.stat(texture_path).st_mtime
+                            != self._texture_is_transparent[texture_path][0]
                         ):
                             im: Image.Image = Image.open(texture_path)
                             if im.mode == "RGBA":
