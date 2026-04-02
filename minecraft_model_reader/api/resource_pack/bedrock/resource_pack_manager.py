@@ -140,8 +140,9 @@ class BedrockResourcePackManager(BaseResourcePackManager):
         else:
             texture_path = self.missing_no
         if (
-            os.stat(texture_path).st_mtime
-            != self._texture_is_transparent.get(texture_path, [0])[0]
+            texture_path not in self._texture_is_transparent
+            or os.stat(texture_path).st_mtime
+            != self._texture_is_transparent[texture_path][0]
         ):
             im: Image.Image = Image.open(texture_path)
             if im.mode == "RGBA":
