@@ -420,12 +420,12 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                 elif axis == "z":
                     rotation_z = -angle
                 rotation_params = (
-                    origin_x,
-                    origin_y,
-                    origin_z,
                     rotation_x,
                     rotation_y,
                     rotation_z,
+                    origin_x,
+                    origin_y,
+                    origin_z,
                 )
             else:
                 rotation_params = None
