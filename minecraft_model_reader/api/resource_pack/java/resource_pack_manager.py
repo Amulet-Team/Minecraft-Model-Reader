@@ -366,12 +366,17 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
             # iterate through elements (one cube per element)
             element_faces = element.get("faces", {})
 
+            element_from = element.get("from", [0, 0, 0])
+            element_to = element.get("to", [16, 16, 16])
+
+            rotation = element.get("rotation", None)
+
             opaque_face_count = 0
             if (
                 transparent
-                and "rotation" not in element
-                and element.get("to", [16, 16, 16]) == [16, 16, 16]
-                and element.get("from", [0, 0, 0]) == [0, 0, 0]
+                and rotation is None
+                and element_to == [16, 16, 16]
+                and element_from == [0, 0, 0]
                 and len(element_faces) >= 6
             ):
                 # if the block is not yet defined as a solid block
@@ -385,8 +390,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
             # lower and upper box coordinates
             corners = numpy.sort(
                 numpy.array(
-                    [element.get("to", [16, 16, 16]), element.get("from", [0, 0, 0])],
-                    float,
+                    [element_to, element_from],
+                    numpy.float64,
                 )
                 / 16,
                 0,
@@ -396,6 +401,34 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
             box_coordinates = numpy.array(
                 list(itertools.product(corners[:, 0], corners[:, 1], corners[:, 2]))
             )
+
+            if rotation is not None:
+                origin_x, origin_y, origin_z = rotation.get("origin", [8, 8, 8])
+                origin_x /= 16
+                origin_y /= 16
+                origin_z /= 16
+
+                axis = rotation.get("axis", "x")
+                angle = rotation.get("angle", 0)
+                rotation_x = 0
+                rotation_y = 0
+                rotation_z = 0
+                if axis == "x":
+                    rotation_x = -angle
+                elif axis == "y":
+                    rotation_y = -angle
+                elif axis == "z":
+                    rotation_z = -angle
+                rotation_params = (
+                    origin_x,
+                    origin_y,
+                    origin_z,
+                    rotation_x,
+                    rotation_y,
+                    rotation_z,
+                )
+            else:
+                rotation_params = None
 
             for face_dir in element_faces:
                 if face_dir in cube_face_lut:
@@ -440,14 +473,83 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                     texture_index = texture_dict[texture_relative_path]
 
                     # get the uv values for each vertex
-                    # TODO: get the uv based on box location if not defined
-                    texture_uv = (
-                        numpy.array(
-                            element_faces[face_dir].get("uv", [0, 0, 16, 16]),
-                            float,
-                        )
-                        / 16
-                    )
+                    uv = element_faces[face_dir].get("uv")
+                    if uv is None:
+                        if face_dir == "up" or face_dir == "down":
+                            texture_uv = (
+                                numpy.array(
+                                    [
+                                        element_from[0],
+                                        element_from[2],
+                                        element_to[0],
+                                        element_to[2],
+                                    ],
+                                    numpy.float64,
+                                )
+                                / 16
+                            )
+                        elif face_dir == "north":
+                            texture_uv = (
+                                numpy.array(
+                                    [
+                                        element_from[0],
+                                        16 - element_to[1],
+                                        element_to[0],
+                                        16 - element_from[1],
+                                    ],
+                                    numpy.float64,
+                                )
+                                / 16
+                            )
+                        elif face_dir == "south":
+                            texture_uv = (
+                                numpy.array(
+                                    [
+                                        element_from[0],
+                                        16 - element_to[1],
+                                        element_to[0],
+                                        16 - element_from[1],
+                                    ],
+                                    numpy.float64,
+                                )
+                                / 16
+                            )
+                        elif face_dir == "west":
+                            texture_uv = (
+                                numpy.array(
+                                    [
+                                        element_from[2],
+                                        16 - element_to[1],
+                                        element_to[2],
+                                        16 - element_from[1],
+                                    ],
+                                    numpy.float64,
+                                )
+                                / 16
+                            )
+                        elif face_dir == "east":
+                            texture_uv = (
+                                numpy.array(
+                                    [
+                                        element_from[2],
+                                        16 - element_to[1],
+                                        element_to[2],
+                                        16 - element_from[1],
+                                    ],
+                                    numpy.float64,
+                                )
+                                / 16
+                            )
+                        else:
+                            texture_uv = numpy.array([0, 0, 16, 16], numpy.float64) / 16
+                    elif (
+                        isinstance(uv, list)
+                        and len(uv) == 4
+                        and all(isinstance(v, (int, float)) for v in uv)
+                    ):
+                        texture_uv = numpy.array(uv, numpy.float64) / 16
+                    else:
+                        raise ValueError(f"Invalid uv value {uv}")
                     texture_rotation = element_faces[face_dir].get("rotation", 0)
                     uv_slice = (
                         uv_rotation_lut[2 * int(texture_rotation / 90) :]
@@ -456,19 +558,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
 
                     # merge the vertex coordinates and texture coordinates
                     face_verts = box_coordinates[cube_face_lut[face_dir]]
-                    if "rotation" in element:
-                        rotation = element["rotation"]
-                        origin = [r / 16 for r in rotation.get("origin", [8, 8, 8])]
-                        angle = rotation.get("angle", 0)
-                        axis = rotation.get("axis", "x")
-                        angles = [0, 0, 0]
-                        if axis == "x":
-                            angles[0] = -angle
-                        elif axis == "y":
-                            angles[1] = -angle
-                        elif axis == "z":
-                            angles[2] = -angle
-                        face_verts = rotate_3d(face_verts, *angles, *origin)
+                    if rotation_params is not None:
+                        face_verts = rotate_3d(face_verts, *rotation_params)
 
                     verts_src[cull_dir].append(
                         face_verts
