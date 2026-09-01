@@ -366,12 +366,17 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
             # iterate through elements (one cube per element)
             element_faces = element.get("faces", {})
 
+            element_from = element.get("from", [0, 0, 0])
+            element_to = element.get("to", [16, 16, 16])
+
+            rotation = element.get("rotation", None)
+
             opaque_face_count = 0
             if (
                 transparent
-                and "rotation" not in element
-                and element.get("to", [16, 16, 16]) == [16, 16, 16]
-                and element.get("from", [0, 0, 0]) == [0, 0, 0]
+                and rotation is None
+                and element_to == [16, 16, 16]
+                and element_from == [0, 0, 0]
                 and len(element_faces) >= 6
             ):
                 # if the block is not yet defined as a solid block
@@ -385,8 +390,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
             # lower and upper box coordinates
             corners = numpy.sort(
                 numpy.array(
-                    [element.get("to", [16, 16, 16]), element.get("from", [0, 0, 0])],
-                    float,
+                    [element_to, element_from],
+                    numpy.float64,
                 )
                 / 16,
                 0,
@@ -397,103 +402,188 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                 list(itertools.product(corners[:, 0], corners[:, 1], corners[:, 2]))
             )
 
-            for face_dir in element_faces:
-                if face_dir in cube_face_lut:
-                    # get the cull direction. If there is an opaque block in this direction then cull this face
-                    cull_dir = element_faces[face_dir].get("cullface", None)
-                    if cull_dir not in FACE_KEYS:
-                        cull_dir = None
+            if rotation is not None:
+                origin_x, origin_y, origin_z = rotation.get("origin", [8, 8, 8])
+                origin_x /= 16
+                origin_y /= 16
+                origin_z /= 16
 
-                    # get the relative texture path for the texture used
-                    texture_relative_path = element_faces[face_dir].get("texture", None)
-                    while isinstance(
-                        texture_relative_path, str
-                    ) and texture_relative_path.startswith("#"):
-                        texture_relative_path = java_model["textures"].get(
-                            texture_relative_path[1:], None
-                        )
-                    if isinstance(texture_relative_path, dict):
-                        texture_relative_path = texture_relative_path["sprite"]
-                    texture_path_list = texture_relative_path.split(":", 1)
-                    if len(texture_path_list) == 2:
-                        namespace, texture_relative_path = texture_path_list
+                axis = rotation.get("axis", "x")
+                angle = rotation.get("angle", 0)
+                rotation_x = 0
+                rotation_y = 0
+                rotation_z = 0
+                if axis == "x":
+                    rotation_x = -angle
+                elif axis == "y":
+                    rotation_y = -angle
+                elif axis == "z":
+                    rotation_z = -angle
+                rotation_params = (
+                    rotation_x,
+                    rotation_y,
+                    rotation_z,
+                    origin_x,
+                    origin_y,
+                    origin_z,
+                )
+            else:
+                rotation_params = None
+
+            for face_dir, face in element_faces.items():
+                if face_dir not in cube_face_lut:
+                    continue
+                # get the cull direction. If there is an opaque block in this direction then cull this face
+                cull_dir = face.get("cullface", None)
+                if cull_dir not in FACE_KEYS:
+                    cull_dir = None
+
+                # get the relative texture path for the texture used
+                texture_relative_path = face.get("texture", None)
+                while isinstance(
+                    texture_relative_path, str
+                ) and texture_relative_path.startswith("#"):
+                    texture_relative_path = java_model["textures"].get(
+                        texture_relative_path[1:], None
+                    )
+                if isinstance(texture_relative_path, dict):
+                    texture_relative_path = texture_relative_path["sprite"]
+                texture_path_list = texture_relative_path.split(":", 1)
+                if len(texture_path_list) == 2:
+                    namespace, texture_relative_path = texture_path_list
+                else:
+                    namespace = "minecraft"
+
+                texture_path = self.get_texture_path(namespace, texture_relative_path)
+
+                if check_faces:
+                    if self._texture_is_transparent[texture_path][1]:
+                        check_faces = False
                     else:
-                        namespace = "minecraft"
+                        opaque_face_count += 1
 
-                    texture_path = self.get_texture_path(
-                        namespace, texture_relative_path
-                    )
+                # get the texture
+                if texture_relative_path not in texture_dict:
+                    texture_dict[texture_relative_path] = texture_count
+                    textures.append(texture_path)
+                    texture_count += 1
 
-                    if check_faces:
-                        if self._texture_is_transparent[texture_path][1]:
-                            check_faces = False
-                        else:
-                            opaque_face_count += 1
+                # texture index for the face
+                texture_index = texture_dict[texture_relative_path]
 
-                    # get the texture
-                    if texture_relative_path not in texture_dict:
-                        texture_dict[texture_relative_path] = texture_count
-                        textures.append(texture_path)
-                        texture_count += 1
-
-                    # texture index for the face
-                    texture_index = texture_dict[texture_relative_path]
-
-                    # get the uv values for each vertex
-                    # TODO: get the uv based on box location if not defined
-                    texture_uv = (
-                        numpy.array(
-                            element_faces[face_dir].get("uv", [0, 0, 16, 16]),
-                            float,
+                # get the uv values for each vertex
+                uv = face.get("uv")
+                if uv is None:
+                    if face_dir == "up" or face_dir == "down":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[0],
+                                    element_from[2],
+                                    element_to[0],
+                                    element_to[2],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
                         )
-                        / 16
-                    )
-                    texture_rotation = element_faces[face_dir].get("rotation", 0)
-                    uv_slice = (
-                        uv_rotation_lut[2 * int(texture_rotation / 90) :]
-                        + uv_rotation_lut[: 2 * int(texture_rotation / 90)]
-                    )
-
-                    # merge the vertex coordinates and texture coordinates
-                    face_verts = box_coordinates[cube_face_lut[face_dir]]
-                    if "rotation" in element:
-                        rotation = element["rotation"]
-                        origin = [r / 16 for r in rotation.get("origin", [8, 8, 8])]
-                        angle = rotation.get("angle", 0)
-                        axis = rotation.get("axis", "x")
-                        angles = [0, 0, 0]
-                        if axis == "x":
-                            angles[0] = -angle
-                        elif axis == "y":
-                            angles[1] = -angle
-                        elif axis == "z":
-                            angles[2] = -angle
-                        face_verts = rotate_3d(face_verts, *angles, *origin)
-
-                    verts_src[cull_dir].append(
-                        face_verts
-                    )  # vertex coordinates for this face
-
-                    tverts_src[cull_dir].append(
-                        texture_uv[uv_slice].reshape((-1, 2))  # texture vertices
-                    )
-                    if "tintindex" in element_faces[face_dir]:
-                        tint_verts_src[cull_dir] += [
-                            0,
-                            1,
-                            0,
-                        ] * 4  # TODO: set this up for each supported block
+                    elif face_dir == "north":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[0],
+                                    16 - element_to[1],
+                                    element_to[0],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
+                    elif face_dir == "south":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[0],
+                                    16 - element_to[1],
+                                    element_to[0],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
+                    elif face_dir == "west":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[2],
+                                    16 - element_to[1],
+                                    element_to[2],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
+                    elif face_dir == "east":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[2],
+                                    16 - element_to[1],
+                                    element_to[2],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
                     else:
-                        tint_verts_src[cull_dir] += [1, 1, 1] * 4
+                        texture_uv = numpy.array([0, 0, 16, 16], numpy.float64) / 16
+                elif (
+                    isinstance(uv, list)
+                    and len(uv) == 4
+                    and all(isinstance(v, (int, float)) for v in uv)
+                ):
+                    texture_uv = numpy.array(uv, numpy.float64) / 16
+                else:
+                    raise ValueError(f"Invalid uv value {uv}")
+                texture_rotation = face.get("rotation", 0)
+                uv_slice = (
+                    uv_rotation_lut[2 * int(texture_rotation / 90) :]
+                    + uv_rotation_lut[: 2 * int(texture_rotation / 90)]
+                )
 
-                    # merge the face indexes and texture index
-                    face_table = tri_face + vert_count[cull_dir]
-                    texture_indexes_src[cull_dir] += [texture_index, texture_index]
+                # merge the vertex coordinates and texture coordinates
+                face_verts = box_coordinates[cube_face_lut[face_dir]]
+                if rotation_params is not None:
+                    face_verts = rotate_3d(face_verts, *rotation_params)
 
-                    # faces stored under cull direction because this is the criteria to render them or not
-                    faces_src[cull_dir].append(face_table)
+                verts_src[cull_dir].append(
+                    face_verts
+                )  # vertex coordinates for this face
 
-                    vert_count[cull_dir] += 4
+                tverts_src[cull_dir].append(
+                    texture_uv[uv_slice].reshape((-1, 2))  # texture vertices
+                )
+                if "tintindex" in face:
+                    tint_verts_src[cull_dir] += [
+                        0,
+                        1,
+                        0,
+                    ] * 4  # TODO: set this up for each supported block
+                else:
+                    tint_verts_src[cull_dir] += [1, 1, 1] * 4
+
+                # merge the face indexes and texture index
+                face_table = tri_face + vert_count[cull_dir]
+                texture_indexes_src[cull_dir] += [texture_index, texture_index]
+
+                # faces stored under cull direction because this is the criteria to render them or not
+                faces_src[cull_dir].append(face_table)
+
+                vert_count[cull_dir] += 4
 
             if opaque_face_count == 6:
                 transparent = Transparency.FullOpaque
