@@ -430,161 +430,160 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
             else:
                 rotation_params = None
 
-            for face_dir in element_faces:
-                if face_dir in cube_face_lut:
-                    # get the cull direction. If there is an opaque block in this direction then cull this face
-                    cull_dir = element_faces[face_dir].get("cullface", None)
-                    if cull_dir not in FACE_KEYS:
-                        cull_dir = None
+            for face_dir, face in element_faces.items():
+                if face_dir not in cube_face_lut:
+                    continue
+                # get the cull direction. If there is an opaque block in this direction then cull this face
+                cull_dir = face.get("cullface", None)
+                if cull_dir not in FACE_KEYS:
+                    cull_dir = None
 
-                    # get the relative texture path for the texture used
-                    texture_relative_path = element_faces[face_dir].get("texture", None)
-                    while isinstance(
-                        texture_relative_path, str
-                    ) and texture_relative_path.startswith("#"):
-                        texture_relative_path = java_model["textures"].get(
-                            texture_relative_path[1:], None
+                # get the relative texture path for the texture used
+                texture_relative_path = face.get("texture", None)
+                while isinstance(
+                    texture_relative_path, str
+                ) and texture_relative_path.startswith("#"):
+                    texture_relative_path = java_model["textures"].get(
+                        texture_relative_path[1:], None
+                    )
+                if isinstance(texture_relative_path, dict):
+                    texture_relative_path = texture_relative_path["sprite"]
+                texture_path_list = texture_relative_path.split(":", 1)
+                if len(texture_path_list) == 2:
+                    namespace, texture_relative_path = texture_path_list
+                else:
+                    namespace = "minecraft"
+
+                texture_path = self.get_texture_path(namespace, texture_relative_path)
+
+                if check_faces:
+                    if self._texture_is_transparent[texture_path][1]:
+                        check_faces = False
+                    else:
+                        opaque_face_count += 1
+
+                # get the texture
+                if texture_relative_path not in texture_dict:
+                    texture_dict[texture_relative_path] = texture_count
+                    textures.append(texture_path)
+                    texture_count += 1
+
+                # texture index for the face
+                texture_index = texture_dict[texture_relative_path]
+
+                # get the uv values for each vertex
+                uv = face.get("uv")
+                if uv is None:
+                    if face_dir == "up" or face_dir == "down":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[0],
+                                    element_from[2],
+                                    element_to[0],
+                                    element_to[2],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
                         )
-                    if isinstance(texture_relative_path, dict):
-                        texture_relative_path = texture_relative_path["sprite"]
-                    texture_path_list = texture_relative_path.split(":", 1)
-                    if len(texture_path_list) == 2:
-                        namespace, texture_relative_path = texture_path_list
+                    elif face_dir == "north":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[0],
+                                    16 - element_to[1],
+                                    element_to[0],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
+                    elif face_dir == "south":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[0],
+                                    16 - element_to[1],
+                                    element_to[0],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
+                    elif face_dir == "west":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[2],
+                                    16 - element_to[1],
+                                    element_to[2],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
+                    elif face_dir == "east":
+                        texture_uv = (
+                            numpy.array(
+                                [
+                                    element_from[2],
+                                    16 - element_to[1],
+                                    element_to[2],
+                                    16 - element_from[1],
+                                ],
+                                numpy.float64,
+                            )
+                            / 16
+                        )
                     else:
-                        namespace = "minecraft"
+                        texture_uv = numpy.array([0, 0, 16, 16], numpy.float64) / 16
+                elif (
+                    isinstance(uv, list)
+                    and len(uv) == 4
+                    and all(isinstance(v, (int, float)) for v in uv)
+                ):
+                    texture_uv = numpy.array(uv, numpy.float64) / 16
+                else:
+                    raise ValueError(f"Invalid uv value {uv}")
+                texture_rotation = face.get("rotation", 0)
+                uv_slice = (
+                    uv_rotation_lut[2 * int(texture_rotation / 90) :]
+                    + uv_rotation_lut[: 2 * int(texture_rotation / 90)]
+                )
 
-                    texture_path = self.get_texture_path(
-                        namespace, texture_relative_path
-                    )
+                # merge the vertex coordinates and texture coordinates
+                face_verts = box_coordinates[cube_face_lut[face_dir]]
+                if rotation_params is not None:
+                    face_verts = rotate_3d(face_verts, *rotation_params)
 
-                    if check_faces:
-                        if self._texture_is_transparent[texture_path][1]:
-                            check_faces = False
-                        else:
-                            opaque_face_count += 1
+                verts_src[cull_dir].append(
+                    face_verts
+                )  # vertex coordinates for this face
 
-                    # get the texture
-                    if texture_relative_path not in texture_dict:
-                        texture_dict[texture_relative_path] = texture_count
-                        textures.append(texture_path)
-                        texture_count += 1
+                tverts_src[cull_dir].append(
+                    texture_uv[uv_slice].reshape((-1, 2))  # texture vertices
+                )
+                if "tintindex" in face:
+                    tint_verts_src[cull_dir] += [
+                        0,
+                        1,
+                        0,
+                    ] * 4  # TODO: set this up for each supported block
+                else:
+                    tint_verts_src[cull_dir] += [1, 1, 1] * 4
 
-                    # texture index for the face
-                    texture_index = texture_dict[texture_relative_path]
+                # merge the face indexes and texture index
+                face_table = tri_face + vert_count[cull_dir]
+                texture_indexes_src[cull_dir] += [texture_index, texture_index]
 
-                    # get the uv values for each vertex
-                    uv = element_faces[face_dir].get("uv")
-                    if uv is None:
-                        if face_dir == "up" or face_dir == "down":
-                            texture_uv = (
-                                numpy.array(
-                                    [
-                                        element_from[0],
-                                        element_from[2],
-                                        element_to[0],
-                                        element_to[2],
-                                    ],
-                                    numpy.float64,
-                                )
-                                / 16
-                            )
-                        elif face_dir == "north":
-                            texture_uv = (
-                                numpy.array(
-                                    [
-                                        element_from[0],
-                                        16 - element_to[1],
-                                        element_to[0],
-                                        16 - element_from[1],
-                                    ],
-                                    numpy.float64,
-                                )
-                                / 16
-                            )
-                        elif face_dir == "south":
-                            texture_uv = (
-                                numpy.array(
-                                    [
-                                        element_from[0],
-                                        16 - element_to[1],
-                                        element_to[0],
-                                        16 - element_from[1],
-                                    ],
-                                    numpy.float64,
-                                )
-                                / 16
-                            )
-                        elif face_dir == "west":
-                            texture_uv = (
-                                numpy.array(
-                                    [
-                                        element_from[2],
-                                        16 - element_to[1],
-                                        element_to[2],
-                                        16 - element_from[1],
-                                    ],
-                                    numpy.float64,
-                                )
-                                / 16
-                            )
-                        elif face_dir == "east":
-                            texture_uv = (
-                                numpy.array(
-                                    [
-                                        element_from[2],
-                                        16 - element_to[1],
-                                        element_to[2],
-                                        16 - element_from[1],
-                                    ],
-                                    numpy.float64,
-                                )
-                                / 16
-                            )
-                        else:
-                            texture_uv = numpy.array([0, 0, 16, 16], numpy.float64) / 16
-                    elif (
-                        isinstance(uv, list)
-                        and len(uv) == 4
-                        and all(isinstance(v, (int, float)) for v in uv)
-                    ):
-                        texture_uv = numpy.array(uv, numpy.float64) / 16
-                    else:
-                        raise ValueError(f"Invalid uv value {uv}")
-                    texture_rotation = element_faces[face_dir].get("rotation", 0)
-                    uv_slice = (
-                        uv_rotation_lut[2 * int(texture_rotation / 90) :]
-                        + uv_rotation_lut[: 2 * int(texture_rotation / 90)]
-                    )
+                # faces stored under cull direction because this is the criteria to render them or not
+                faces_src[cull_dir].append(face_table)
 
-                    # merge the vertex coordinates and texture coordinates
-                    face_verts = box_coordinates[cube_face_lut[face_dir]]
-                    if rotation_params is not None:
-                        face_verts = rotate_3d(face_verts, *rotation_params)
-
-                    verts_src[cull_dir].append(
-                        face_verts
-                    )  # vertex coordinates for this face
-
-                    tverts_src[cull_dir].append(
-                        texture_uv[uv_slice].reshape((-1, 2))  # texture vertices
-                    )
-                    if "tintindex" in element_faces[face_dir]:
-                        tint_verts_src[cull_dir] += [
-                            0,
-                            1,
-                            0,
-                        ] * 4  # TODO: set this up for each supported block
-                    else:
-                        tint_verts_src[cull_dir] += [1, 1, 1] * 4
-
-                    # merge the face indexes and texture index
-                    face_table = tri_face + vert_count[cull_dir]
-                    texture_indexes_src[cull_dir] += [texture_index, texture_index]
-
-                    # faces stored under cull direction because this is the criteria to render them or not
-                    faces_src[cull_dir].append(face_table)
-
-                    vert_count[cull_dir] += 4
+                vert_count[cull_dir] += 4
 
             if opaque_face_count == 6:
                 transparent = Transparency.FullOpaque
