@@ -414,11 +414,17 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                 rotation_y = 0
                 rotation_z = 0
                 if axis == "x":
-                    rotation_x = -angle
+                    rotation_x = angle
                 elif axis == "y":
-                    rotation_y = -angle
+                    rotation_y = angle
                 elif axis == "z":
-                    rotation_z = -angle
+                    rotation_z = angle
+
+                # 1.21.11 added rotation in multiple axis
+                rotation_x = rotation.get("x", rotation_x)
+                rotation_y = rotation.get("y", rotation_y)
+                rotation_z = rotation.get("z", rotation_z)
+
                 rotation_params = (
                     rotation_x,
                     rotation_y,

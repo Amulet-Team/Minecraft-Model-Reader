@@ -314,7 +314,7 @@ class BlockMesh:
                     cull_remap[cull_dir]: rotate_3d(
                         rotate_3d(
                             self.verts[cull_dir].reshape((-1, self.face_mode)),
-                            rotx * 90,
+                            -rotx * 90,
                             0,
                             0,
                             0.5,
@@ -322,7 +322,7 @@ class BlockMesh:
                             0.5,
                         ),
                         0,
-                        roty * 90,
+                        -roty * 90,
                         0,
                         0.5,
                         0.5,

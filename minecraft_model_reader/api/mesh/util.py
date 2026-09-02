@@ -4,13 +4,14 @@ import numpy
 def rotate_3d(
     verts: numpy.ndarray, x: float, y: float, z: float, dx: float, dy: float, dz: float
 ) -> numpy.ndarray:
-    sb, sh, sa = numpy.sin(numpy.radians([x, y, z]))
-    cb, ch, ca = numpy.cos(numpy.radians([x, y, z]))
+    radians = numpy.radians([x, y, z])
+    sx, sy, sz = numpy.sin(radians)
+    cx, cy, cz = numpy.cos(radians)
     trmtx = numpy.array(
         [
-            [ch * ca, -ch * sa * cb + sh * sb, ch * sa * sb + sh * cb],
-            [sa, ca * cb, -ca * sb],
-            [-sh * ca, sh * sa * cb + ch * sb, -sh * sa * sb + ch * cb],
+            [cz * cy, sz * cy, -sy],
+            [cz * sy * sx - sz * cx, sz * sy * sx + cz * cx, cy * sx],
+            [cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx],
         ]
     )
     origin = numpy.array([dx, dy, dz])
