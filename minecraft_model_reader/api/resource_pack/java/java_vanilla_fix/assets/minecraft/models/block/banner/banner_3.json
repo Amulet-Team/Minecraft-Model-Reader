@@ -2,7 +2,7 @@
 	"credit": "Made with Blockbench",
 	"texture_size": [64, 64],
 	"textures": {
-		"base": "entity/banner_base",
+		"base": "entity/banner/banner_base",
 		"colour": "#colour",
 		"particle": "block/oak_planks"
 	},
