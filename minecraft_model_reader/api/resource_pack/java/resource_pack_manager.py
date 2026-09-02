@@ -436,6 +436,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
             else:
                 rotation_params = None
 
+            texture_map = java_model["textures"]
+
             for face_dir, face in element_faces.items():
                 if face_dir not in cube_face_lut:
                     continue
@@ -444,14 +446,33 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                 if cull_dir not in FACE_KEYS:
                     cull_dir = None
 
-                # get the relative texture path for the texture used
-                texture_relative_path = face.get("texture", None)
-                while isinstance(
-                    texture_relative_path, str
-                ) and texture_relative_path.startswith("#"):
-                    texture_relative_path = java_model["textures"].get(
-                        texture_relative_path[1:], None
-                    )
+                def find_texture() -> str | dict:
+                    # texture can be "all", "#all", "block/name", "minecraft:block/name"
+                    texture_key = face.get("texture", None)
+
+                    if not isinstance(texture_key, str):
+                        return texture_key
+
+                    # Track the keys we have found to make sure we are not in a loop
+                    found_keys = set()
+
+                    while True:
+                        if texture_key.startswith("#"):
+                            texture_key = texture_key[1:]
+
+                        if texture_key in found_keys:
+                            raise RuntimeError(f"{texture_key} referenced itself")
+                        found_keys.add(texture_key)
+
+                        key_or_value = texture_map.get(texture_key, None)
+                        if key_or_value is None:
+                            return texture_key
+                        elif not isinstance(key_or_value, str):
+                            return key_or_value
+                        texture_key = key_or_value
+
+                texture_relative_path = find_texture()
+
                 if isinstance(texture_relative_path, dict):
                     texture_relative_path = texture_relative_path["sprite"]
                 texture_path_list = texture_relative_path.split(":", 1)
