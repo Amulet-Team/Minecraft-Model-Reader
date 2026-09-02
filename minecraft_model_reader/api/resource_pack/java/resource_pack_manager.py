@@ -425,6 +425,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                 rotation_y = rotation.get("y", rotation_y)
                 rotation_z = rotation.get("z", rotation_z)
 
+                rescale = rotation.get("rescale", False)
+
                 rotation_params = (
                     rotation_x,
                     rotation_y,
@@ -432,6 +434,7 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                     origin_x,
                     origin_y,
                     origin_z,
+                    rescale,
                 )
             else:
                 rotation_params = None
