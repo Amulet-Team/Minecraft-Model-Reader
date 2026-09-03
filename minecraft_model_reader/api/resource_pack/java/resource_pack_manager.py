@@ -40,6 +40,77 @@ UselessImageGroups = {
 }
 
 
+def _get_colour(r: int, g: int, b: int) -> tuple[float, float, float]:
+    return r / 255, g / 255, b / 255
+
+
+DefaultFoliageColour = _get_colour(0x77, 0xAB, 0x2F)
+GrassColour = _get_colour(0x92, 0xBC, 0x58)
+BlockTints: dict[str, tuple[float, float, float]] = {
+    "minecraft:leaf_litter": _get_colour(0xA3, 0x75, 0x46),
+    "minecraft:pink_petals": GrassColour,
+    "minecraft:wildflowers": GrassColour,
+    "minecraft:large_fern": GrassColour,
+    "minecraft:tall_grass": GrassColour,
+    "minecraft:potted_fern": GrassColour,
+    "minecraft:water_cauldron": _get_colour(0x44, 0xAF, 0xF5),
+    "minecraft:lily_pad": _get_colour(0x20, 0x80, 0x30),
+    "minecraft:attached_pumpkin_stem": _get_colour(0xE0, 0xC7, 0x1C),
+    "minecraft:attached_melon_stem": _get_colour(0xE0, 0xC7, 0x1C),
+    "minecraft:vine": DefaultFoliageColour,
+    "minecraft:short_grass": GrassColour,
+    "minecraft:fern": GrassColour,
+    "minecraft:bush": GrassColour,
+    "minecraft:jungle_leaves": DefaultFoliageColour,
+    "minecraft:acacia_leaves": DefaultFoliageColour,
+    "minecraft:dark_oak_leaves": DefaultFoliageColour,
+    "minecraft:birch_leaves": _get_colour(0x80, 0xA7, 0x55),
+    "minecraft:spruce_leaves": _get_colour(0x61, 0x99, 0x61),
+    "minecraft:oak_leaves": DefaultFoliageColour,
+    "minecraft:mangrove_leaves": DefaultFoliageColour,
+    "minecraft:grass_block": GrassColour,
+}
+
+RedstoneTints: dict[str, tuple[float, float, float]] = {
+    "0": _get_colour(0x4C, 0x00, 0x00),
+    "1": _get_colour(0x70, 0x00, 0x00),
+    "2": _get_colour(0x7A, 0x00, 0x00),
+    "3": _get_colour(0x84, 0x00, 0x00),
+    "4": _get_colour(0x8E, 0x00, 0x00),
+    "5": _get_colour(0x99, 0x00, 0x00),
+    "6": _get_colour(0xA3, 0x00, 0x00),
+    "7": _get_colour(0xAD, 0x00, 0x00),
+    "8": _get_colour(0xB7, 0x00, 0x00),
+    "9": _get_colour(0xC1, 0x00, 0x00),
+    "10": _get_colour(0xCC, 0x00, 0x00),
+    "11": _get_colour(0xD6, 0x00, 0x00),
+    "12": _get_colour(0xE0, 0x00, 0x00),
+    "13": _get_colour(0xEA, 0x06, 0x00),
+    "14": _get_colour(0xF4, 0x1B, 0x00),
+    "15": _get_colour(0xFF, 0x32, 0x00),
+}
+
+StemTints: dict[str, tuple[float, float, float]] = {
+    "0": _get_colour(0x00, 0xFF, 0x00),
+    "1": _get_colour(0x20, 0xF7, 0x04),
+    "2": _get_colour(0x40, 0xEF, 0x08),
+    "3": _get_colour(0x60, 0xE7, 0x0C),
+    "4": _get_colour(0x80, 0xDF, 0x10),
+    "5": _get_colour(0xA0, 0xD7, 0x14),
+    "6": _get_colour(0xC0, 0xCF, 0x18),
+    "7": _get_colour(0xE0, 0xC7, 0x1C),
+}
+
+
+def _get_block_tint(block: Block) -> tuple[float, float, float]:
+    if block.namespace == "minecraft":
+        if block.base_name == "redstone_wire":
+            return RedstoneTints[block.properties["power"].py_str]
+        elif block.base_name == "pumpkin_stem" or block.base_name == "melon_stem":
+            return StemTints[block.properties["age"].py_str]
+    return BlockTints.get(block.namespaced_name, (1, 1, 1))
+
+
 class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
     """A class to load and handle the data from the packs.
     Packs are given as a list with the later packs overwriting the earlier ones."""
@@ -234,7 +305,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                     if variant == "":
                         try:
                             return self._load_blockstate_model(
-                                blockstate["variants"][variant]
+                                blockstate["variants"][variant],
+                                tint=_get_block_tint(block),
                             )
                         except Exception as e:
                             log.exception(
@@ -254,7 +326,8 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                         ):
                             try:
                                 return self._load_blockstate_model(
-                                    blockstate["variants"][variant]
+                                    blockstate["variants"][variant],
+                                    tint=_get_block_tint(block),
                                 )
                             except Exception as e:
                                 log.exception(
@@ -297,7 +370,9 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                         if "apply" in case:
                             try:
                                 models.append(
-                                    self._load_blockstate_model(case["apply"])
+                                    self._load_blockstate_model(
+                                        case["apply"], tint=_get_block_tint(block)
+                                    )
                                 )
 
                             except Exception as e:
@@ -312,7 +387,10 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
         return self.missing_block
 
     def _load_blockstate_model(
-        self, blockstate_value: Union[dict, list[dict]]
+        self,
+        blockstate_value: Union[dict, list[dict]],
+        *,
+        tint: tuple[float, float, float] = (1, 1, 1),
     ) -> BlockMesh:
         """Load the model(s) associated with a block state and apply rotations if needed."""
         if isinstance(blockstate_value, list):
@@ -324,12 +402,14 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
         roty = int(blockstate_value.get("y", 0) // 90)
         uvlock = blockstate_value.get("uvlock", False)
 
-        model = copy.deepcopy(self._load_block_model(model_path))
+        model = copy.deepcopy(self._load_block_model(model_path, tint=tint))
 
         # TODO: rotate model based on uv_lock
         return model.rotate(rotx, roty)
 
-    def _load_block_model(self, model_path: str) -> BlockMesh:
+    def _load_block_model(
+        self, model_path: str, *, tint: tuple[float, float, float] = (1, 1, 1)
+    ) -> BlockMesh:
         """Load the model file associated with the Block and convert to a BlockMesh."""
         # recursively load model files into one dictionary
         java_model = self._recursive_load_block_model(model_path)
@@ -598,11 +678,7 @@ class JavaResourcePackManager(BaseResourcePackManager[JavaResourcePack]):
                     texture_uv[uv_slice].reshape((-1, 2))  # texture vertices
                 )
                 if "tintindex" in face:
-                    tint_verts_src[cull_dir] += [
-                        0,
-                        1,
-                        0,
-                    ] * 4  # TODO: set this up for each supported block
+                    tint_verts_src[cull_dir] += tint * 4
                 else:
                     tint_verts_src[cull_dir] += [1, 1, 1] * 4
 
