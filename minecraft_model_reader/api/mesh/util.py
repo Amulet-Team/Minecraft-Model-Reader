@@ -2,16 +2,30 @@ import numpy
 
 
 def rotate_3d(
-    verts: numpy.ndarray, x: float, y: float, z: float, dx: float, dy: float, dz: float
+    verts: numpy.ndarray,
+    rx: float,
+    ry: float,
+    rz: float,
+    dx: float,
+    dy: float,
+    dz: float,
+    rescale: bool = False,
 ) -> numpy.ndarray:
-    sb, sh, sa = numpy.sin(numpy.radians([x, y, z]))
-    cb, ch, ca = numpy.cos(numpy.radians([x, y, z]))
+    radians = numpy.radians([rx, ry, rz])
+    sx, sy, sz = numpy.sin(radians)
+    cx, cy, cz = numpy.cos(radians)
     trmtx = numpy.array(
         [
-            [ch * ca, -ch * sa * cb + sh * sb, ch * sa * sb + sh * cb],
-            [sa, ca * cb, -ca * sb],
-            [-sh * ca, sh * sa * cb + ch * sb, -sh * sa * sb + ch * cb],
+            [cz * cy, sz * cy, -sy],
+            [cz * sy * sx - sz * cx, sz * sy * sx + cz * cx, cy * sx],
+            [cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx],
         ]
     )
     origin = numpy.array([dx, dy, dz])
-    return numpy.matmul(verts - origin, trmtx) + origin  # type: ignore
+    offset_verts = verts - origin
+    if rescale:
+        offset_verts[:, 0] /= max(cy * cz, 1e-6, key=abs)
+        offset_verts[:, 1] /= max(cx * cz, 1e-6, key=abs)
+        offset_verts[:, 2] /= max(cx * cy, 1e-6, key=abs)
+
+    return numpy.matmul(offset_verts, trmtx) + origin  # type: ignore

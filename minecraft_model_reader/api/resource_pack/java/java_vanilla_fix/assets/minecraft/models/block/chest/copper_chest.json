@@ -1,0 +1,6 @@
+{
+    "parent": "block/chest/chest_base",
+    "textures": {
+        "chest": "entity/chest/copper"
+    }
+}
