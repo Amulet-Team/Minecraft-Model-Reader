@@ -2,7 +2,14 @@ import numpy
 
 
 def rotate_3d(
-    verts: numpy.ndarray, rx: float, ry: float, rz: float, dx: float, dy: float, dz: float, rescale: bool = False
+    verts: numpy.ndarray,
+    rx: float,
+    ry: float,
+    rz: float,
+    dx: float,
+    dy: float,
+    dz: float,
+    rescale: bool = False,
 ) -> numpy.ndarray:
     radians = numpy.radians([rx, ry, rz])
     sx, sy, sz = numpy.sin(radians)
